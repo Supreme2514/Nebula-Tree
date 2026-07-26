@@ -62,6 +62,11 @@ function formatStatValue(type, value) {
 //   shown in the detail panel too, e.g. "Rank 0/7" means max is 7).
 // label: short text shown as a tooltip on that step's numbered badge.
 // ─────────────────────────────────────────────────────────────────────────
+// Presets are still a work in progress - set to true to bring the guide
+// selector/button/badges back once ready. Data and logic below are untouched,
+// this just gates whether the UI shows up.
+const PRESETS_ENABLED = false;
+
 const PRESET_BUILDS = [
   {
     id: "mage_newbie",
@@ -252,6 +257,50 @@ function starPosition(c) {
   return { x, y };
 }
 
+// Encodes a build (class, allocated points, star levels) into a compact
+// string safe for a URL hash - not human-readable, just short. Packs each
+// allocated node as a single base36 number (nodeId*10 + rank, since ranks
+// never exceed 9), and all 7 star levels as fixed-width base36 pairs so no
+// separators are needed for that part.
+function encodeBuild(classIdx, allocated, starLevels) {
+  const classPart = classIdx.toString(36);
+  const starsPart = STAR_IDS.map((id) => (starLevels[id] || 0).toString(36).padStart(2, "0")).join("");
+  const allocPairs = Object.entries(allocated)
+    .filter(([, r]) => r > 0)
+    .map(([id, r]) => (Number(id) * 10 + r).toString(36))
+    .join(".");
+  return `${classPart}${starsPart}~${allocPairs}`;
+}
+
+function decodeBuild(str) {
+  try {
+    const [head, allocPart] = str.split("~");
+    const classIdx = parseInt(head[0], 36);
+    if (!Number.isFinite(classIdx) || classIdx < 0 || classIdx > 4) return null;
+    const starsHex = head.slice(1);
+    const starLevels = {};
+    for (let i = 0; i < STAR_IDS.length; i++) {
+      const chunk = starsHex.slice(i * 2, i * 2 + 2);
+      const level = parseInt(chunk, 36) || 0;
+      if (level > 0) starLevels[STAR_IDS[i]] = level;
+    }
+    const allocated = {};
+    if (allocPart) {
+      for (const p of allocPart.split(".")) {
+        if (!p) continue;
+        const packed = parseInt(p, 36);
+        if (!Number.isFinite(packed)) continue;
+        const nodeId = Math.floor(packed / 10);
+        const rank = packed % 10;
+        allocated[nodeId] = rank;
+      }
+    }
+    return { classIdx, allocated, starLevels };
+  } catch {
+    return null;
+  }
+}
+
 function starLevelLabel(level) {
   if (level <= 0) return "T0";
   const tier = Math.floor((level - 1) / 7) + 1;
@@ -432,6 +481,21 @@ export default function TalentTree() {
   const svgRef = useRef(null);
   const [showSummary, setShowSummary] = useState(true);
   const [activeGuideId, setActiveGuideId] = useState(null);
+  const [pendingSharedBuild, setPendingSharedBuild] = useState(null);
+  const [shareCopied, setShareCopied] = useState(false);
+
+  // On mount, check if the URL carries a shared build (in the hash, so it
+  // never gets sent to any server) and stage it for confirmation rather
+  // than applying it immediately - don't want to silently blow away
+  // whatever the visitor already had going.
+  useEffect(() => {
+    const hash = window.location.hash;
+    const match = hash.match(/#b=(.+)/);
+    if (match) {
+      const decoded = decodeBuild(decodeURIComponent(match[1]));
+      if (decoded) setPendingSharedBuild(decoded);
+    }
+  }, []);
 
   // Autosave the build whenever it changes, so returning later (even days
   // later) picks up right where it was left off instead of opening fresh.
@@ -515,6 +579,38 @@ export default function TalentTree() {
   function resetAll() {
     setAllocated({});
     setSelectedId(null);
+  }
+
+  function shareBuild() {
+    const encoded = encodeBuild(classIdx, allocated, starLevels);
+    const url = `${window.location.origin}${window.location.pathname}#b=${encodeURIComponent(encoded)}`;
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(url).then(
+        () => {
+          setShareCopied(true);
+          setTimeout(() => setShareCopied(false), 2000);
+        },
+        () => window.prompt("Copy this link:", url)
+      );
+    } else {
+      window.prompt("Copy this link:", url);
+    }
+  }
+
+  function loadSharedBuild() {
+    if (!pendingSharedBuild) return;
+    setClassIdx(pendingSharedBuild.classIdx);
+    setAllocated(pendingSharedBuild.allocated);
+    setStarLevels(pendingSharedBuild.starLevels);
+    setSelectedId(null);
+    setSelectedStarId(null);
+    setPendingSharedBuild(null);
+    window.history.replaceState(null, "", window.location.pathname);
+  }
+
+  function dismissSharedBuild() {
+    setPendingSharedBuild(null);
+    window.history.replaceState(null, "", window.location.pathname);
   }
 
   // Applies a preset guide step by step, each step resolved through the
@@ -679,6 +775,56 @@ export default function TalentTree() {
         ::-webkit-scrollbar-thumb { background: #4a443d; border-radius: 4px; }
       `}</style>
 
+      {pendingSharedBuild && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            padding: "10px 16px",
+            background: "#2a2113",
+            borderBottom: `1px solid ${GOLD}`,
+            fontSize: 13,
+          }}
+        >
+          <span style={{ color: BRIGHT }}>
+            This link has a shared build ({CLASSES[pendingSharedBuild.classIdx]?.name}). Load it? This will
+            replace your current build.
+          </span>
+          <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+            <button
+              onClick={loadSharedBuild}
+              style={{
+                padding: "5px 12px",
+                borderRadius: 6,
+                border: `1px solid ${GOLD}`,
+                background: GOLD + "22",
+                color: BRIGHT,
+                fontSize: 12,
+                cursor: "pointer",
+              }}
+            >
+              Load it
+            </button>
+            <button
+              onClick={dismissSharedBuild}
+              style={{
+                padding: "5px 12px",
+                borderRadius: 6,
+                border: "1px solid #3a322b",
+                background: "transparent",
+                color: MUTED,
+                fontSize: 12,
+                cursor: "pointer",
+              }}
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
       <div
         style={{
           display: "flex",
@@ -746,6 +892,7 @@ export default function TalentTree() {
             {spent} / {pointPool} pts
           </div>
           {(() => {
+            if (!PRESETS_ENABLED) return null;
             const guidesForClass = PRESET_BUILDS.filter((g) => g.classIdx === classIdx);
             if (guidesForClass.length === 0) return null;
             const activeGuide = guidesForClass.find((g) => g.id === activeGuideId);
@@ -765,7 +912,7 @@ export default function TalentTree() {
                     }}
                     title="Allocate every step of this guide in order"
                   >
-                    Apply Guide
+                    Use preset
                   </button>
                 )}
                 <select
@@ -794,6 +941,20 @@ export default function TalentTree() {
               </>
             );
           })()}
+          <button
+            onClick={shareBuild}
+            style={{
+              padding: "6px 12px",
+              borderRadius: 6,
+              border: `1px solid ${shareCopied ? "#5ec26a" : "#3a322b"}`,
+              background: shareCopied ? "#5ec26a22" : "transparent",
+              color: shareCopied ? "#8fe09a" : MUTED,
+              fontSize: 12,
+              cursor: "pointer",
+            }}
+          >
+            {shareCopied ? "Link copied!" : "Share Build"}
+          </button>
           <button
             onClick={() => setShowSummary((s) => !s)}
             style={{
@@ -972,6 +1133,7 @@ export default function TalentTree() {
 
           {/* Active guide step badges */}
           {(() => {
+            if (!PRESETS_ENABLED) return null;
             const guide = PRESET_BUILDS.find((g) => g.id === activeGuideId && g.classIdx === classIdx);
             if (!guide) return null;
             return guide.steps.map((step, i) => {
@@ -1383,7 +1545,9 @@ export default function TalentTree() {
                   color: BRIGHT,
                   lineHeight: 1.5,
                   marginBottom: 16,
-                  minHeight: 60,
+                  minHeight: 100,
+                  maxHeight: 140,
+                  overflowY: "auto",
                 }}
               >
                 {(() => {
