@@ -422,25 +422,61 @@ function applyPathToRank(node, allocated, rank = node.maxRank) {
   return next;
 }
 
-// Zeroes out a node, cascading to remove points from anything that
-// currently depends on it (so we never leave an illegal state).
+// Computes which currently-allocated nodes are actually reachable from a
+// true root given a fixed allocation snapshot - see cascadeRemove for why
+// this has to be forward reachability rather than a "still looks
+// satisfied" recheck (the data has real cycles that can self-sustain
+// under the weaker check).
+function computeValidSet(working) {
+  const valid = new Set();
+  for (const n of NODES) {
+    if ((working[n.id] || 0) > 0 && (!n.act || n.act.length === 0)) valid.add(n.id);
+  }
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const n of NODES) {
+      const cur = working[n.id] || 0;
+      if (cur <= 0 || valid.has(n.id)) continue;
+      if (!n.act || n.act.length === 0) continue;
+      const ok = n.act.some((packed) => {
+        const tid = Math.round(packed / 1000);
+        const treq = packed % 1000;
+        return valid.has(tid) && (working[tid] || 0) >= treq;
+      });
+      if (ok) {
+        valid.add(n.id);
+        changed = true;
+      }
+    }
+  }
+  return valid;
+}
+
+// Zeroes out a node, cascading to remove points from anything that's no
+// longer validly connected to the start as a result.
+//
+// This has to be a forward reachability sweep, not a "recheck each node's
+// condition against current state" loop - the data has real cycles (e.g.
+// nodes 67, 164, 155, and 520 can each point at one of the others as a
+// valid alternative), and a cluster like that can prop itself up forever
+// under a "still looks satisfied" check even after its only real anchor to
+// the rest of the tree is gone, since each member always finds some other
+// member of the same cluster still allocated to point at.
+//
+// The fix: start with NOTHING proven valid, then only promote a node to
+// valid if it has no prerequisites (a true root) or at least one
+// alternative is ALREADY proven valid - repeat until nothing new is
+// promoted. A self-referential cluster with no real external anchor can
+// never get its first member promoted this way, so it correctly falls out
+// instead of surviving indefinitely.
 function cascadeRemove(nodeId, allocated) {
   const working = { ...allocated };
-  function removeAllPointsFrom(id) {
-    NODES.forEach((other) => {
-      const cur = working[other.id] || 0;
-      if (cur <= 0 || other.id === id) return;
-      if (!other.act || other.act.length === 0) return;
-      const satisfiedBefore = unlockCondition(other, working);
-      const trial = { ...working, [id]: 0 };
-      const satisfiedAfter = unlockCondition(other, trial);
-      if (satisfiedBefore && !satisfiedAfter) {
-        removeAllPointsFrom(other.id);
-      }
-    });
-    working[id] = 0;
+  working[nodeId] = 0;
+  const valid = computeValidSet(working);
+  for (const n of NODES) {
+    if ((working[n.id] || 0) > 0 && !valid.has(n.id)) working[n.id] = 0;
   }
-  removeAllPointsFrom(nodeId);
   return working;
 }
 
@@ -566,17 +602,15 @@ export default function TalentTree() {
     (n) => {
       const cur = allocated[n.id] || 0;
       if (cur <= 0) return false;
-      const wouldBreakDependent = NODES.some((other) => {
-        const otherCur = allocated[other.id] || 0;
-        if (otherCur <= 0) return false;
-        if (!other.act || other.act.length === 0) return false;
-        const satisfiedNow = unlockCondition(other, allocated);
-        if (!satisfiedNow) return false;
-        const hypothetical = { ...allocated, [n.id]: cur - 1 };
-        const satisfiedAfter = unlockCondition(other, hypothetical);
-        return !satisfiedAfter;
-      });
-      return !wouldBreakDependent;
+      // Simulate the -1 and check real reachability (see computeValidSet) -
+      // a plain "still satisfied" recheck can miss cases where a break
+      // only surfaces inside a self-referencing cluster of nodes.
+      const working = { ...allocated, [n.id]: cur - 1 };
+      const valid = computeValidSet(working);
+      const wouldOrphanSomething = NODES.some(
+        (other) => other.id !== n.id && (working[other.id] || 0) > 0 && !valid.has(other.id)
+      );
+      return !wouldOrphanSomething;
     },
     [allocated]
   );
@@ -678,13 +712,18 @@ export default function TalentTree() {
     locked: LOCKED,
   };
 
-  const ZOOM_LEVELS = [3, 4]; // two zoom-IN steps above the 2x default
-  const [zoomIdx, setZoomIdx] = useState(-1); // -1 = default/standard view, now 2x
-  const scale = zoomIdx === -1 ? 2 : ZOOM_LEVELS[zoomIdx];
+  // Desktop gets 2x/3x/4x, mobile gets just 2x/3x (a smaller screen makes
+  // 4x mostly unnecessary and harder to navigate back out of). Starts at
+  // 2x either way. Falls back to index 0 if isMobile flips mid-session
+  // (e.g. window resized across the breakpoint) and the level list shrinks
+  // out from under the current index.
+  const ZOOM_LEVELS = isMobile ? [2, 3] : [2, 3, 4];
+  const [zoomIdx, setZoomIdx] = useState(0);
+  const scale = ZOOM_LEVELS[zoomIdx] ?? ZOOM_LEVELS[0];
 
   function cycleZoom() {
-    const nextIdx = zoomIdx + 1 >= ZOOM_LEVELS.length ? -1 : zoomIdx + 1;
-    const newScale = nextIdx === -1 ? 1 : ZOOM_LEVELS[nextIdx];
+    const nextIdx = (zoomIdx + 1) % ZOOM_LEVELS.length;
+    const newScale = ZOOM_LEVELS[nextIdx];
     // Keep whatever content point is currently at the center of the
     // viewport staying at the center after the zoom level changes, instead
     // of anchoring on the top-left corner. viewBox is fixed at 1080x1240,
@@ -774,12 +813,12 @@ export default function TalentTree() {
 
   return (
     <div
+      className="app-root"
       style={{
         fontFamily: "'Inter', system-ui, sans-serif",
         background: CANVAS_BG,
         color: BRIGHT,
         width: "100%",
-        height: "100vh",
         touchAction: "none",
         overscrollBehavior: "none",
         display: "flex",
@@ -795,6 +834,7 @@ export default function TalentTree() {
         .node-circle:hover { filter: brightness(1.3); }
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-thumb { background: #4a443d; border-radius: 4px; }
+        .app-root { height: 100vh; height: 100dvh; }
       `}</style>
 
       {pendingSharedBuild && (
@@ -1272,17 +1312,17 @@ export default function TalentTree() {
 
           <button
             onClick={cycleZoom}
-            title="Zoom in / reset"
+            title="Cycle zoom level"
             style={{
               position: "absolute",
-              bottom: 16,
+              bottom: "calc(16px + env(safe-area-inset-bottom, 0px))",
               right: 16,
               width: 40,
               height: 40,
               borderRadius: "50%",
-              border: `1px solid ${zoomIdx === -1 ? "#3a322b" : BRONZE}`,
-              background: zoomIdx === -1 ? "#221b16" : BRONZE + "22",
-              color: zoomIdx === -1 ? MUTED : BRONZE,
+              border: `1px solid ${zoomIdx === 0 ? "#3a322b" : BRONZE}`,
+              background: zoomIdx === 0 ? "#221b16" : BRONZE + "22",
+              color: zoomIdx === 0 ? MUTED : BRONZE,
               fontSize: 18,
               cursor: "pointer",
               display: "flex",
@@ -1297,7 +1337,7 @@ export default function TalentTree() {
             title="Credits"
             style={{
               position: "absolute",
-              bottom: 16,
+              bottom: "calc(16px + env(safe-area-inset-bottom, 0px))",
               left: 16,
               width: 40,
               height: 40,
@@ -1316,11 +1356,11 @@ export default function TalentTree() {
           >
             i
           </button>
-          {zoomIdx !== -1 && (
+          {zoomIdx !== 0 && (
             <div
               style={{
                 position: "absolute",
-                bottom: 20,
+                bottom: "calc(20px + env(safe-area-inset-bottom, 0px))",
                 right: 62,
                 fontSize: 11,
                 color: BRONZE,
@@ -1340,12 +1380,20 @@ export default function TalentTree() {
               isMobile
                 ? {
                     position: "fixed",
-                    inset: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    height: "35vh",
+                    maxHeight: "35vh",
                     background: PANEL_BG,
+                    borderTop: `1px solid ${BRONZE}`,
+                    borderTopLeftRadius: 14,
+                    borderTopRightRadius: 14,
                     padding: 16,
-                    paddingTop: 50,
+                    paddingTop: 10,
                     overflowY: "auto",
                     zIndex: 500,
+                    boxShadow: "0 -4px 20px rgba(0,0,0,0.5)",
                   }
                 : {
                     width: 260,
@@ -1357,25 +1405,36 @@ export default function TalentTree() {
             }
           >
             {isMobile && (
-              <button
-                onClick={() => setMobilePanelOpen(false)}
-                style={{
-                  position: "fixed",
-                  top: 10,
-                  right: 12,
-                  width: 32,
-                  height: 32,
-                  borderRadius: "50%",
-                  border: "1px solid #3a322b",
-                  background: "#221b16",
-                  color: BRIGHT,
-                  fontSize: 16,
-                  cursor: "pointer",
-                  zIndex: 501,
-                }}
-              >
-                &times;
-              </button>
+              <>
+                <div
+                  style={{
+                    width: 36,
+                    height: 4,
+                    borderRadius: 2,
+                    background: "#3a322b",
+                    margin: "0 auto 10px",
+                  }}
+                />
+                <button
+                  onClick={() => setMobilePanelOpen(false)}
+                  style={{
+                    position: "absolute",
+                    top: 8,
+                    right: 12,
+                    width: 28,
+                    height: 28,
+                    borderRadius: "50%",
+                    border: "1px solid #3a322b",
+                    background: "#221b16",
+                    color: BRIGHT,
+                    fontSize: 14,
+                    cursor: "pointer",
+                    zIndex: 501,
+                  }}
+                >
+                  &times;
+                </button>
+              </>
             )}
           {selectedStarId != null && (
             <div style={{ marginBottom: 18, paddingBottom: 14, borderBottom: "1px solid #33291f" }}>
