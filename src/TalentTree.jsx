@@ -483,6 +483,7 @@ export default function TalentTree() {
   const [activeGuideId, setActiveGuideId] = useState(null);
   const [pendingSharedBuild, setPendingSharedBuild] = useState(null);
   const [shareCopied, setShareCopied] = useState(false);
+  const [showCredits, setShowCredits] = useState(false);
 
   // On mount, check if the URL carries a shared build (in the hash, so it
   // never gets sent to any server) and stage it for confirmation rather
@@ -1256,6 +1257,30 @@ export default function TalentTree() {
           >
             🔍
           </button>
+          <button
+            onClick={() => setShowCredits(true)}
+            title="Credits"
+            style={{
+              position: "absolute",
+              bottom: 16,
+              left: 16,
+              width: 40,
+              height: 40,
+              borderRadius: "50%",
+              border: "1px solid #3a322b",
+              background: "#221b16",
+              color: MUTED,
+              fontSize: 15,
+              fontStyle: "italic",
+              fontFamily: "Georgia, serif",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            i
+          </button>
           {zoomIdx !== -1 && (
             <div
               style={{
@@ -1798,6 +1823,61 @@ export default function TalentTree() {
           )}
         </div>
       </div>
+
+      {showCredits && (
+        <div
+          onClick={() => setShowCredits(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.7)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "#1a1512",
+              border: `1px solid ${BRONZE}`,
+              borderRadius: 10,
+              padding: "24px 28px",
+              maxWidth: 380,
+              width: "90%",
+              position: "relative",
+            }}
+          >
+            <button
+              onClick={() => setShowCredits(false)}
+              style={{
+                position: "absolute",
+                top: 12,
+                right: 12,
+                background: "transparent",
+                border: "none",
+                color: MUTED,
+                fontSize: 16,
+                cursor: "pointer",
+                lineHeight: 1,
+              }}
+            >
+              &times;
+            </button>
+            <div className="talent-title" style={{ fontSize: 16, color: GOLD, marginBottom: 16 }}>
+              Credits
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, fontSize: 13, color: BRIGHT }}>
+              <div>Made by <span style={{ color: BRONZE }}>Supreme</span></div>
+              <div>Original tree planner by <span style={{ color: BRONZE }}>David Tai</span></div>
+              <div>Assassin and Archer skills provided by <span style={{ color: BRONZE }}>Grrravity</span></div>
+              <div>Assassin and Archer icons made by <span style={{ color: BRONZE }}>Gemini AI</span></div>
+              <div>Coded with <span style={{ color: BRONZE }}>Claude AI</span></div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
