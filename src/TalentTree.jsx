@@ -514,6 +514,7 @@ export default function TalentTree() {
   const [selectedId, setSelectedId] = useState(null);
   const [view, setView] = useState({ x: -522, y: -688 });
   const dragRef = useRef(null);
+  const suppressClickRef = useRef(false);
   const svgRef = useRef(null);
   const [showSummary, setShowSummary] = useState(true);
   const [activeGuideId, setActiveGuideId] = useState(null);
@@ -712,14 +713,12 @@ export default function TalentTree() {
     locked: LOCKED,
   };
 
-  // Desktop gets 2x/3x/4x, mobile gets just 2x/3x (a smaller screen makes
-  // 4x mostly unnecessary and harder to navigate back out of). Starts at
-  // 2x either way. Falls back to index 0 if isMobile flips mid-session
-  // (e.g. window resized across the breakpoint) and the level list shrinks
-  // out from under the current index.
-  const ZOOM_LEVELS = isMobile ? [2, 3] : [2, 3, 4];
-  const [zoomIdx, setZoomIdx] = useState(0);
-  const scale = ZOOM_LEVELS[zoomIdx] ?? ZOOM_LEVELS[0];
+  // Desktop gets 1x/2x/3x/4x, mobile gets 1x/2x/3x. Starts at 2x either
+  // way - 1x is there so people can pull back and see the whole pathway
+  // at once, not as the default view.
+  const ZOOM_LEVELS = isMobile ? [1, 2, 3] : [1, 2, 3, 4];
+  const [zoomIdx, setZoomIdx] = useState(ZOOM_LEVELS.indexOf(2));
+  const scale = ZOOM_LEVELS[zoomIdx] ?? 2;
 
   function cycleZoom() {
     const nextIdx = (zoomIdx + 1) % ZOOM_LEVELS.length;
@@ -764,6 +763,20 @@ export default function TalentTree() {
     setView({ x: dragRef.current.view.x + dx, y: dragRef.current.view.y + dy });
   }
   function onPointerUp() {
+    // A drag that actually moved (engaged) still fires a native click
+    // right after pointerup - if that click lands on a node, it would
+    // select it even though the user was just panning. Suppress exactly
+    // one click in that case. Auto-clear shortly after regardless of
+    // whether a node's onClick actually consumes it - if the drag ended
+    // over empty canvas (no node under the cursor), nothing would ever
+    // reset the flag otherwise, incorrectly suppressing the next
+    // unrelated click too.
+    if (dragRef.current?.engaged) {
+      suppressClickRef.current = true;
+      setTimeout(() => {
+        suppressClickRef.current = false;
+      }, 0);
+    }
     dragRef.current = null;
   }
 
@@ -792,10 +805,17 @@ export default function TalentTree() {
   NODES.forEach((n) => {
     (n.act || []).forEach((packed) => {
       const targetId = Math.round(packed / 1000);
+      const targetReq = packed % 1000;
       const target = nodeById(targetId);
       if (!target) return;
       const cur = allocated[n.id] || 0;
       const lit = cur > 0;
+      // n having points doesn't mean THIS specific alternative is the one
+      // that satisfied it - only color it gold if this target actually
+      // meets the rank this edge requires. Otherwise it's just another
+      // option that happens to render alongside the real one.
+      const thisAltSatisfied = (allocated[target.id] || 0) >= targetReq;
+      const isActivePath = lit && thisAltSatisfied;
       lines.push(
         <line
           key={`${target.id}-${n.id}`}
@@ -803,9 +823,9 @@ export default function TalentTree() {
           y1={target.y}
           x2={n.x}
           y2={n.y}
-          stroke={lit ? GOLD : "#332a22"}
-          strokeWidth={lit ? 2.5 : 1.5}
-          opacity={lit ? 0.9 : 0.5}
+          stroke={isActivePath ? GOLD : lit ? "#e8e2d8" : "#332a22"}
+          strokeWidth={isActivePath ? 2.5 : lit ? 1.5 : 1.5}
+          opacity={isActivePath ? 0.9 : lit ? 0.35 : 0.5}
         />
       );
     });
@@ -1107,6 +1127,10 @@ export default function TalentTree() {
                   key={n.id}
                   transform={`translate(${n.x},${n.y})`}
                   onClick={() => {
+                    if (suppressClickRef.current) {
+                      suppressClickRef.current = false;
+                      return;
+                    }
                     setSelectedId(n.id);
                     setSelectedStarId(null);
                   }}
@@ -1260,6 +1284,10 @@ export default function TalentTree() {
                   key={id}
                   transform={`translate(${pos.x},${pos.y})`}
                   onClick={() => {
+                    if (suppressClickRef.current) {
+                      suppressClickRef.current = false;
+                      return;
+                    }
                     setSelectedStarId(id);
                     setSelectedId(null);
                   }}
@@ -1320,9 +1348,9 @@ export default function TalentTree() {
               width: 40,
               height: 40,
               borderRadius: "50%",
-              border: `1px solid ${zoomIdx === 0 ? "#3a322b" : BRONZE}`,
-              background: zoomIdx === 0 ? "#221b16" : BRONZE + "22",
-              color: zoomIdx === 0 ? MUTED : BRONZE,
+              border: `1px solid ${scale === 2 ? "#3a322b" : BRONZE}`,
+              background: scale === 2 ? "#221b16" : BRONZE + "22",
+              color: scale === 2 ? MUTED : BRONZE,
               fontSize: 18,
               cursor: "pointer",
               display: "flex",
@@ -1356,7 +1384,7 @@ export default function TalentTree() {
           >
             i
           </button>
-          {zoomIdx !== 0 && (
+          {scale !== 2 && (
             <div
               style={{
                 position: "absolute",
@@ -1383,8 +1411,8 @@ export default function TalentTree() {
                     left: 0,
                     right: 0,
                     bottom: 0,
-                    height: "35vh",
-                    maxHeight: "35vh",
+                    height: "35dvh",
+                    maxHeight: "35dvh",
                     background: PANEL_BG,
                     borderTop: `1px solid ${BRONZE}`,
                     borderTopLeftRadius: 14,
@@ -1418,8 +1446,8 @@ export default function TalentTree() {
                 <button
                   onClick={() => setMobilePanelOpen(false)}
                   style={{
-                    position: "absolute",
-                    top: 8,
+                    position: "fixed",
+                    bottom: "calc(35dvh + 8px)",
                     right: 12,
                     width: 28,
                     height: 28,
