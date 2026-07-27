@@ -61,20 +61,88 @@ function formatStatValue(type, value) {
 // rank: how many points that node should end up with (its max rank is
 //   shown in the detail panel too, e.g. "Rank 0/7" means max is 7).
 // label: short text shown as a tooltip on that step's numbered badge.
+// badge: optional - overrides what the numbered badge on the map shows
+//   (e.g. "*" for an optional/situational step). Defaults to the step's
+//   position in the list (1, 2, 3...) if not set.
 // ─────────────────────────────────────────────────────────────────────────
 // Presets are still a work in progress - set to true to bring the guide
 // selector/button/badges back once ready. Data and logic below are untouched,
 // this just gates whether the UI shows up.
-const PRESETS_ENABLED = false;
+const PRESETS_ENABLED = true;
 
 const PRESET_BUILDS = [
   {
     id: "mage_newbie",
-    name: "Mage - New Player Guide",
+    name: "Mage - Starter Build",
     classIdx: 1,
     steps: [
-      { nodeId: 510, rank: 7, label: "Max Thunderstorm first" },
-      { nodeId: 551, rank: 7, label: "Then max Roar of Ice" },
+      { nodeId: 510, rank: 7, label: "Max this one out for Silence. Most important node you have." },
+      {
+        nodeId: 551,
+        rank: 1,
+        badge: "*",
+        label:
+          "Optional to put 1-2 points in this if you want extra range, wasting points if you put in more so dont max it.",
+      },
+      { nodeId: 552, rank: 7, badge: "2", label: "Max this for more freeze duration." },
+      { nodeId: 512, rank: 7, badge: "3", label: "More paralyze, max to be more annoying." },
+    ],
+  },
+  {
+    id: "warrior_newbie",
+    name: "Warrior - Starter Build",
+    classIdx: 0,
+    steps: [
+      {
+        nodeId: 502,
+        rank: 7,
+        label: "Max this for everyday farming. After that you can choose either 2 or 3 first, both are great.",
+      },
+      {
+        nodeId: 560,
+        rank: 7,
+        label:
+          "When you have totem unlocked this is by far the best boss killer skill you will have. Max it and enjoy.",
+      },
+      { nodeId: 550, rank: 7, label: "Great for PvP. Ouch and Silence." },
+    ],
+  },
+  {
+    id: "archer_newbie",
+    name: "Archer - Starter Build",
+    classIdx: 4,
+    steps: [
+      { nodeId: 502, rank: 7, label: "Based on others, this is good to get first." },
+      { nodeId: 512, rank: 7, label: "This is the second go-to." },
+      { nodeId: 501, rank: 7, label: "More precision shot, what could go wrong." },
+    ],
+  },
+  {
+    id: "assassin_newbie",
+    name: "Assassin - Starter Build",
+    classIdx: 3,
+    steps: [
+      { nodeId: 502, rank: 7, label: "Max this for everyday farming." },
+      {
+        nodeId: 540,
+        rank: 7,
+        label: "Damage based on current hp% which is not that bad, but also a stun. And stun is nice.",
+      },
+    ],
+  },
+  {
+    id: "taoist_newbie",
+    name: "Taoist - Starter Build",
+    classIdx: 2,
+    steps: [
+      {
+        nodeId: 512,
+        rank: 6,
+        label:
+          "This you dont want to max, ever. Does insane splash damage as long as you keep it lvl 1-6. Do. Not. Max.",
+      },
+      { nodeId: 510, rank: 7, label: "Another good Soul Amulet node to get." },
+      { nodeId: 502, rank: 7, label: "More healing is nice, and cheap to get." },
     ],
   },
 ];
@@ -98,6 +166,33 @@ const DEFAULT_POOL = 120;
 
 function nodeById(id) {
   return NODES.find((n) => n.id === id);
+}
+
+// No floppy-disk/trash-bin icons exist in the game's own UI asset set (it's
+// a fantasy MMO icon sheet, not generic desktop icons) - drawn by hand
+// instead, sized/styled to match the existing min/max button icons
+// (currentColor so they inherit the button's text color automatically).
+// Solid-filled rather than outlined, to match the min/max icons' weight.
+function SaveIcon({ size = 14 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
+      <path
+        d="M5 3h11l5 5v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"
+        fill="currentColor"
+      />
+      <rect x="8" y="3" width="8" height="5" fill="#1a1512" opacity="0.55" />
+      <rect x="7" y="13" width="10" height="7" fill="#1a1512" opacity="0.55" />
+    </svg>
+  );
+}
+function TrashIcon({ size = 14 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
+      <rect x="9" y="1.5" width="6" height="2.2" rx="0.6" fill="currentColor" />
+      <rect x="4" y="5.2" width="16" height="2" rx="0.6" fill="currentColor" />
+      <path d="M5.5 8h13l-1.1 12.4a2 2 0 0 1-2 1.8H8.6a2 2 0 0 1-2-1.8L5.5 8z" fill="currentColor" />
+    </svg>
+  );
 }
 
 function isKeystone(n) {
@@ -512,13 +607,73 @@ function saveBuild(data) {
   }
 }
 
+const CHARACTERS_KEY = "talentTreeCharacters:v1";
+
+// Saved characters are a completely separate storage layer from the
+// live/scratch build above - loading one copies its data INTO the live
+// state, but nothing ever writes back to a saved character except an
+// explicit Save action. Playing around in the tree, or opening a shared
+// build link, never touches these.
+function loadCharacters() {
+  try {
+    const raw = window.localStorage.getItem(CHARACTERS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+function saveCharacters(list) {
+  try {
+    window.localStorage.setItem(CHARACTERS_KEY, JSON.stringify(list));
+  } catch {
+    // storage unavailable/blocked
+  }
+}
+
 export default function TalentTree() {
   const saved = useMemo(() => loadSavedBuild(), []);
   const [classIdx, setClassIdx] = useState(saved?.classIdx ?? 0);
-  const [allocated, setAllocated] = useState(saved?.allocated ?? {});
+  // Each class keeps its own independent scratch build - switching tabs
+  // shows that class's own progress, not a single build shared across all
+  // five. Old saved data only had one flat "allocated" object (from before
+  // this was per-class) - migrate it onto whichever class was active when
+  // it was saved, rather than silently discarding it.
+  const [allocatedByClass, setAllocatedByClass] = useState(() => {
+    if (saved?.allocatedByClass) return saved.allocatedByClass;
+    if (saved?.allocated) return { [saved.classIdx ?? 0]: saved.allocated };
+    return {};
+  });
+  const allocated = allocatedByClass[classIdx] || {};
+  // Drop-in replacement for the old single-build setAllocated - same call
+  // shapes work (plain object or updater function), just scoped to
+  // whichever class is currently active.
+  const setAllocated = useCallback(
+    (updater) => {
+      setAllocatedByClass((prev) => {
+        const current = prev[classIdx] || {};
+        const next = typeof updater === "function" ? updater(current) : updater;
+        return { ...prev, [classIdx]: next };
+      });
+    },
+    [classIdx]
+  );
   const [starLevels, setStarLevels] = useState(saved?.starLevels ?? {});
   const [selectedStarId, setSelectedStarId] = useState(null);
   const [bonusPoints, setBonusPoints] = useState(saved?.bonusPoints ?? 0);
+  const [characters, setCharacters] = useState(() => loadCharacters());
+  // Which saved character (if any) is currently loaded into the live
+  // state - null means "just playing around", not tied to any character.
+  const [activeCharacterId, setActiveCharacterId] = useState(null);
+  const [newCharacterName, setNewCharacterName] = useState("");
+  const [showNewCharacterInput, setShowNewCharacterInput] = useState(false);
+  const [charDropdownOpen, setCharDropdownOpen] = useState(false);
+  // window.confirm() can be silently blocked in sandboxed iframe previews
+  // (confirmed: it doesn't even fire there) - custom confirmation instead,
+  // guaranteed to work everywhere since it's just app UI, not a native
+  // browser dialog.
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
   const [view, setView] = useState({ x: -522, y: -688 });
   const dragRef = useRef(null);
@@ -532,6 +687,9 @@ export default function TalentTree() {
   // When set, every node granting this stat type gets a red highlight ring
   // on the map (the "Show all" button in the detail panel).
   const [highlightType, setHighlightType] = useState(null);
+  // Which guide-step badge's tooltip is currently showing - hover on
+  // desktop, tap-to-toggle on mobile (no hover there).
+  const [activeGuideTooltip, setActiveGuideTooltip] = useState(null);
 
   // Mobile layout kicks in below this width - the fixed-width side panel
   // and multi-row button bar were both designed desktop-first and become
@@ -545,6 +703,13 @@ export default function TalentTree() {
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
+  // Separate from isMobile (screen width) - this is specifically about
+  // whether the device fires touch events at all. Matters for the guide
+  // badge tooltip: after a real tap, browsers synthesize a compatibility
+  // mouseleave shortly after (since no cursor is left hovering), which
+  // would otherwise immediately undo a tap-triggered tooltip if hover
+  // handlers were also attached.
+  const hasTouch = typeof window !== "undefined" && "ontouchstart" in window;
   // On mobile, the panel is an overlay shown only when there's something to
   // show, instead of a permanent column - this tracks whether it's open.
   // Opened directly from the node/star click handlers (not via a
@@ -569,13 +734,25 @@ export default function TalentTree() {
   // Autosave the build whenever it changes, so returning later (even days
   // later) picks up right where it was left off instead of opening fresh.
   useEffect(() => {
-    saveBuild({ classIdx, allocated, starLevels, bonusPoints });
-  }, [classIdx, allocated, starLevels, bonusPoints]);
+    saveBuild({ classIdx, allocatedByClass, starLevels, bonusPoints });
+  }, [classIdx, allocatedByClass, starLevels, bonusPoints]);
 
   const spent = useMemo(
     () => Object.values(allocated).reduce((a, b) => a + b, 0),
     [allocated]
   );
+  const activeCharacter = useMemo(
+    () => characters.find((c) => c.id === activeCharacterId) || null,
+    [characters, activeCharacterId]
+  );
+  const hasUnsavedChanges = useMemo(() => {
+    if (!activeCharacter) return false;
+    return (
+      activeCharacter.classIdx !== classIdx ||
+      JSON.stringify(activeCharacter.allocated) !== JSON.stringify(allocated) ||
+      JSON.stringify(activeCharacter.starLevels) !== JSON.stringify(starLevels)
+    );
+  }, [activeCharacter, classIdx, allocated, starLevels]);
   // Each nebula star level grants 1 skill point - confirmed mechanic
   // (all 7 stars at level 1 = 7 points). bonusPoints is an optional
   // manual top-up on top of that, defaulting to 0.
@@ -667,17 +844,77 @@ export default function TalentTree() {
   function loadSharedBuild() {
     if (!pendingSharedBuild) return;
     setClassIdx(pendingSharedBuild.classIdx);
-    setAllocated(pendingSharedBuild.allocated);
+    // Not using the setAllocated shim here - it closes over the CURRENT
+    // classIdx, but we're also changing classIdx in this same action, so it
+    // could write into the wrong class's slot. Target the new class
+    // explicitly instead.
+    setAllocatedByClass((prev) => ({ ...prev, [pendingSharedBuild.classIdx]: pendingSharedBuild.allocated }));
     setStarLevels(pendingSharedBuild.starLevels);
     setSelectedId(null);
     setSelectedStarId(null);
     setPendingSharedBuild(null);
+    setActiveCharacterId(null); // never silently attach a shared build to one of your characters
     window.history.replaceState(null, "", window.location.pathname);
   }
 
   function dismissSharedBuild() {
     setPendingSharedBuild(null);
     window.history.replaceState(null, "", window.location.pathname);
+  }
+
+  function loadCharacter(id) {
+    const c = characters.find((c) => c.id === id);
+    if (!c) return;
+    setClassIdx(c.classIdx);
+    // Same reasoning as loadSharedBuild - target the character's own class
+    // explicitly rather than via the setAllocated shim.
+    setAllocatedByClass((prev) => ({ ...prev, [c.classIdx]: c.allocated }));
+    setStarLevels(c.starLevels);
+    setSelectedId(null);
+    setSelectedStarId(null);
+    setActiveCharacterId(id);
+    setConfirmDeleteId(null);
+  }
+
+  function saveActiveCharacter() {
+    if (!activeCharacterId) return;
+    setCharacters((prev) => {
+      const next = prev.map((c) =>
+        c.id === activeCharacterId ? { ...c, classIdx, allocated, starLevels, savedAt: Date.now() } : c
+      );
+      saveCharacters(next);
+      return next;
+    });
+  }
+
+  function saveAsNewCharacter(name) {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const newChar = {
+      id: `char_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      name: trimmed,
+      classIdx,
+      allocated,
+      starLevels,
+      savedAt: Date.now(),
+    };
+    setCharacters((prev) => {
+      const next = [...prev, newChar];
+      saveCharacters(next);
+      return next;
+    });
+    setActiveCharacterId(newChar.id);
+    setNewCharacterName("");
+    setShowNewCharacterInput(false);
+  }
+
+  function deleteCharacter(id) {
+    setCharacters((prev) => {
+      const next = prev.filter((c) => c.id !== id);
+      saveCharacters(next);
+      return next;
+    });
+    if (activeCharacterId === id) setActiveCharacterId(null);
   }
 
   // Applies a preset guide step by step, each step resolved through the
@@ -1033,7 +1270,7 @@ export default function TalentTree() {
             {assetHref("nebula-skill-point") && (
               <img src={assetHref("nebula-skill-point")} alt="" width={16} height={16} />
             )}
-            {spent} / {pointPool} pts
+            {spent} / {pointPool}
           </div>
           {(() => {
             if (!PRESETS_ENABLED) return null;
@@ -1137,6 +1374,285 @@ export default function TalentTree() {
         </div>
       </div>
 
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "8px 18px",
+          borderBottom: `1px solid #33291f`,
+          background: PANEL_BG,
+          flexWrap: "wrap",
+          position: "relative",
+        }}
+      >
+        <span style={{ fontSize: 12, color: MUTED }}>Character:</span>
+
+        {(() => {
+          const sortedCharacters = [...characters].sort(
+            (a, b) => a.classIdx - b.classIdx || a.name.localeCompare(b.name)
+          );
+          const charPoints = (c) => Object.values(c.allocated || {}).reduce((a, b) => a + b, 0);
+          const charIcon = (c) => assetHref(CLASSES[c.classIdx].name.toLowerCase());
+
+          return (
+            <div style={{ position: "relative" }}>
+              <button
+                onClick={() => setCharDropdownOpen((o) => !o)}
+                style={{
+                  background: "#15100c",
+                  border: "1px solid #33291f",
+                  borderRadius: 6,
+                  color: activeCharacter ? BRIGHT : MUTED,
+                  fontSize: 12,
+                  padding: "5px 8px",
+                  minWidth: 170,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  justifyContent: "space-between",
+                }}
+              >
+                <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  {activeCharacter && charIcon(activeCharacter) && (
+                    <img src={charIcon(activeCharacter)} alt="" width={16} height={16} style={{ borderRadius: 3 }} />
+                  )}
+                  {activeCharacter ? `${activeCharacter.name} (${charPoints(activeCharacter)})` : "Not saved (scratch)"}
+                </span>
+                <span style={{ fontSize: 9, color: MUTED }}>▾</span>
+              </button>
+
+              {charDropdownOpen && (
+                <>
+                  <div
+                    onClick={() => setCharDropdownOpen(false)}
+                    style={{ position: "fixed", inset: 0, zIndex: 400 }}
+                  />
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "calc(100% + 4px)",
+                      left: 0,
+                      minWidth: 220,
+                      maxHeight: 260,
+                      overflowY: "auto",
+                      background: "#15100c",
+                      border: "1px solid #33291f",
+                      borderRadius: 6,
+                      zIndex: 401,
+                      boxShadow: "0 6px 20px rgba(0,0,0,0.5)",
+                    }}
+                  >
+                    <div
+                      onClick={() => {
+                        setActiveCharacterId(null);
+                        setConfirmDeleteId(null);
+                        setCharDropdownOpen(false);
+                      }}
+                      style={{
+                        padding: "7px 10px",
+                        fontSize: 12,
+                        color: !activeCharacter ? BRIGHT : MUTED,
+                        cursor: "pointer",
+                        borderBottom: "1px solid #221b16",
+                      }}
+                    >
+                      Not saved (scratch)
+                    </div>
+                    {sortedCharacters.map((c) => (
+                      <div
+                        key={c.id}
+                        onClick={() => {
+                          loadCharacter(c.id);
+                          setCharDropdownOpen(false);
+                        }}
+                        style={{
+                          padding: "7px 10px",
+                          fontSize: 12,
+                          color: activeCharacterId === c.id ? BRIGHT : "#c9c2b6",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
+                          background: activeCharacterId === c.id ? GOLD + "18" : "transparent",
+                        }}
+                      >
+                        {charIcon(c) && (
+                          <img src={charIcon(c)} alt="" width={16} height={16} style={{ borderRadius: 3 }} />
+                        )}
+                        {c.name} ({charPoints(c)})
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })()}
+
+        {hasUnsavedChanges && (
+          <span style={{ fontSize: 11, color: "#e0a05a" }}>&#9679; unsaved changes</span>
+        )}
+        {activeCharacter && (
+          <button
+            onClick={saveActiveCharacter}
+            disabled={!hasUnsavedChanges}
+            style={{
+              padding: "5px 12px",
+              borderRadius: 6,
+              border: `1px solid ${hasUnsavedChanges ? GOLD : "#3a322b"}`,
+              background: hasUnsavedChanges ? GOLD + "22" : "transparent",
+              color: hasUnsavedChanges ? BRIGHT : "#4a443d",
+              fontSize: 12,
+              cursor: hasUnsavedChanges ? "pointer" : "not-allowed",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            <SaveIcon />
+            Save
+          </button>
+        )}
+        {showNewCharacterInput ? (
+          <>
+            <input
+              autoFocus
+              value={newCharacterName}
+              onChange={(e) => setNewCharacterName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") saveAsNewCharacter(newCharacterName);
+                if (e.key === "Escape") {
+                  setShowNewCharacterInput(false);
+                  setNewCharacterName("");
+                }
+              }}
+              placeholder="Character name"
+              style={{
+                background: "#15100c",
+                border: "1px solid #33291f",
+                borderRadius: 6,
+                color: BRIGHT,
+                fontSize: 12,
+                padding: "5px 8px",
+                width: 130,
+              }}
+            />
+            <button
+              onClick={() => saveAsNewCharacter(newCharacterName)}
+              style={{
+                padding: "5px 10px",
+                borderRadius: 6,
+                border: `1px solid ${GOLD}`,
+                background: GOLD + "22",
+                color: BRIGHT,
+                fontSize: 12,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              <SaveIcon />
+              Confirm
+            </button>
+            <button
+              onClick={() => {
+                setShowNewCharacterInput(false);
+                setNewCharacterName("");
+              }}
+              style={{
+                padding: "5px 10px",
+                borderRadius: 6,
+                border: "1px solid #3a322b",
+                background: "transparent",
+                color: MUTED,
+                fontSize: 12,
+                cursor: "pointer",
+              }}
+            >
+              Cancel
+            </button>
+          </>
+        ) : (
+          <button
+            onClick={() => setShowNewCharacterInput(true)}
+            style={{
+              padding: "5px 12px",
+              borderRadius: 6,
+              border: "1px solid #3a322b",
+              background: "transparent",
+              color: MUTED,
+              fontSize: 12,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            <SaveIcon />
+            Save as new
+          </button>
+        )}
+        {activeCharacter && !confirmDeleteId && (
+          <button
+            onClick={() => setConfirmDeleteId(activeCharacter.id)}
+            style={{
+              padding: "5px 10px",
+              borderRadius: 6,
+              border: "1px solid #5a2a24",
+              background: "transparent",
+              color: "#e0847a",
+              fontSize: 12,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            <TrashIcon />
+            Delete
+          </button>
+        )}
+        {activeCharacter && confirmDeleteId === activeCharacter.id && (
+          <>
+            <span style={{ fontSize: 12, color: "#e0847a" }}>Delete "{activeCharacter.name}"?</span>
+            <button
+              onClick={() => {
+                deleteCharacter(confirmDeleteId);
+                setConfirmDeleteId(null);
+              }}
+              style={{
+                padding: "5px 10px",
+                borderRadius: 6,
+                border: "1px solid #e0473d",
+                background: "#e0473d22",
+                color: "#ff8478",
+                fontSize: 12,
+                cursor: "pointer",
+              }}
+            >
+              Yes, delete
+            </button>
+            <button
+              onClick={() => setConfirmDeleteId(null)}
+              style={{
+                padding: "5px 10px",
+                borderRadius: 6,
+                border: "1px solid #3a322b",
+                background: "transparent",
+                color: MUTED,
+                fontSize: 12,
+                cursor: "pointer",
+              }}
+            >
+              Cancel
+            </button>
+          </>
+        )}
+      </div>
+
       <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
         <div style={{ position: "relative", flex: 1 }}>
           <svg
@@ -1208,6 +1724,23 @@ export default function TalentTree() {
                       strokeWidth={isSel ? 2.5 : isKeystone(n) ? 2 : 1.2}
                     />
                   )}
+                  {n.q === 1 && (
+                    // The q1 border art is the smallest source asset (30x30)
+                    // rendered at the smallest on-screen size (18px) - a
+                    // brightness boost couldn't fix it because the real
+                    // problem is the ring detail becoming sub-pixel thin
+                    // after scaling, not just dim. Drawing a crisp vector
+                    // ring here is guaranteed visible regardless of source
+                    // asset fidelity.
+                    <circle
+                      r={r - 0.75}
+                      fill="none"
+                      stroke={active ? GOLD : "#9a9488"}
+                      strokeWidth={1.3}
+                      opacity={state === "locked" ? 0.6 : active ? 0.95 : 0.8}
+                      style={{ pointerEvents: "none" }}
+                    />
+                  )}
                   {icon && (
                     <image
                       href={icon}
@@ -1220,12 +1753,18 @@ export default function TalentTree() {
                     />
                   )}
                   {isSel && highlight && (
+                    // Measured: the bright ring inside this asset sits at
+                    // 67% of its own half-width. At the old 1.3r size that
+                    // put it at ~0.87r - almost exactly on top of the
+                    // keystone rank dots (0.855r). Sized up to 1.8r so it
+                    // lands at ~1.2r instead, clearly outside both the dots
+                    // and the node's own border edge.
                     <image
                       href={highlight}
-                      x={-r * 1.3}
-                      y={-r * 1.3}
-                      width={r * 2.6}
-                      height={r * 2.6}
+                      x={-r * 1.8}
+                      y={-r * 1.8}
+                      width={r * 3.6}
+                      height={r * 3.6}
                       style={{ pointerEvents: "none" }}
                     />
                   )}
@@ -1235,10 +1774,10 @@ export default function TalentTree() {
                   {highlightType != null && nodeGrantsType(n, highlightType) && highlight && (
                     <image
                       href={highlight}
-                      x={-r * 1.3}
-                      y={-r * 1.3}
-                      width={r * 2.6}
-                      height={r * 2.6}
+                      x={-r * 1.8}
+                      y={-r * 1.8}
+                      width={r * 3.6}
+                      height={r * 3.6}
                       style={{ pointerEvents: "none", filter: "hue-rotate(140deg) saturate(1.4)" }}
                     />
                   )}
@@ -1304,12 +1843,60 @@ export default function TalentTree() {
             return guide.steps.map((step, i) => {
               const n = nodeById(step.nodeId);
               if (!n) return null;
+              const tooltipOpen = activeGuideTooltip === i;
               return (
-                <g key={i} transform={`translate(${n.x},${n.y})`} style={{ pointerEvents: "none" }}>
-                  <circle cx={16} cy={-16} r={11} fill={GOLD} stroke="#1a1512" strokeWidth={1.5} />
-                  <text x={16} y={-16} dy="4" textAnchor="middle" fontSize="11" fontWeight="700" fill="#1a1512">
-                    {i + 1}
-                  </text>
+                <g key={i} transform={`translate(${n.x},${n.y})`}>
+                  <g
+                    style={{ cursor: step.label ? "pointer" : "default" }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (step.label) setActiveGuideTooltip(tooltipOpen ? null : i);
+                    }}
+                    onMouseEnter={hasTouch ? undefined : () => step.label && setActiveGuideTooltip(i)}
+                    onMouseLeave={
+                      hasTouch ? undefined : () => setActiveGuideTooltip((cur) => (cur === i ? null : cur))
+                    }
+                  >
+                    <circle cx={16} cy={-16} r={11} fill={GOLD} stroke="#1a1512" strokeWidth={1.5} />
+                    <text x={16} y={-16} dy="4" textAnchor="middle" fontSize="11" fontWeight="700" fill="#1a1512">
+                      {step.badge ?? i + 1}
+                    </text>
+                  </g>
+                  {tooltipOpen && step.label && (() => {
+                    // Fixed-size box clipped longer labels. Estimate line
+                    // count from character length instead, so short labels
+                    // stay compact and long ones actually get room to show.
+                    const tooltipWidth = 220;
+                    const charsPerLine = 32;
+                    const estLines = Math.max(1, Math.ceil(step.label.length / charsPerLine));
+                    const tooltipHeight = estLines * 15 + 18;
+                    return (
+                      <foreignObject
+                        x={16 - tooltipWidth / 2}
+                        y={-16 - 11 - 6 - tooltipHeight}
+                        width={tooltipWidth}
+                        height={tooltipHeight}
+                        style={{ pointerEvents: "none" }}
+                      >
+                        <div
+                          style={{
+                            background: "#15100cf2",
+                            border: `1px solid ${GOLD}`,
+                            borderRadius: 6,
+                            padding: "5px 8px",
+                            fontSize: 11,
+                            color: BRIGHT,
+                            fontFamily: "'Inter', system-ui, sans-serif",
+                            textAlign: "center",
+                            lineHeight: 1.3,
+                          }}
+                        >
+                          {step.label}
+                        </div>
+                      </foreignObject>
+                    );
+                  })()}
                 </g>
               );
             });
@@ -1746,6 +2333,21 @@ export default function TalentTree() {
                           width={size}
                           height={size}
                           style={{ position: "absolute", top: 0, left: 0 }}
+                        />
+                      )}
+                      {selected.q === 1 && (
+                        <div
+                          style={{
+                            position: "absolute",
+                            top: 1.5,
+                            left: 1.5,
+                            width: size - 3,
+                            height: size - 3,
+                            borderRadius: "50%",
+                            border: `1.5px solid ${active ? GOLD : "#9a9488"}`,
+                            opacity: active ? 0.95 : 0.8,
+                            pointerEvents: "none",
+                          }}
                         />
                       )}
                       {icon && (
