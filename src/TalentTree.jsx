@@ -2803,9 +2803,11 @@ export default function TalentTree() {
             onClick={(e) => e.stopPropagation()}
             style={{
               position: "relative",
-              width: "min(560px, 92vw)",
-              maxHeight: "88vh",
-              overflowY: "auto",
+              width: "min(504px, 90vw)",
+              height: "min(680px, 88vh)",
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
               backgroundImage: assetHref("nebula-detail-panel-bg")
                 ? `url(${assetHref("nebula-detail-panel-bg")})`
                 : undefined,
@@ -2834,42 +2836,24 @@ export default function TalentTree() {
               &times;
             </button>
 
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", marginBottom: 14, flexShrink: 0 }}>
               <span className="talent-title" style={{ fontSize: 15, color: GOLD }}>
                 Nebula Stars
               </span>
-              <button
-                onClick={resetStarsOnly}
-                style={{
-                  padding: "5px 12px",
-                  borderRadius: 6,
-                  border: "1px solid #5a2a24",
-                  background: "transparent",
-                  color: "#e0847a",
-                  fontSize: 12,
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                }}
-              >
-                {assetHref("reset-btn") && <img src={assetHref("reset-btn")} alt="" width={13} height={13} />}
-                Reset
-              </button>
             </div>
 
             <div
               style={{
                 display: "grid",
                 gridTemplateColumns: "repeat(3, 1fr)",
-                gap: 10,
-                marginBottom: 18,
+                gap: 7,
+                marginBottom: 14,
+                flexShrink: 0,
               }}
             >
               {STAR_IDS.map((id, idx) => {
                 const level = starLevels[id] || 0;
                 const icon = assetHref(`n${idx + 1}`);
-                const isLast = idx === 6;
                 return (
                   <div
                     key={id}
@@ -2878,20 +2862,19 @@ export default function TalentTree() {
                       setSelectedId(null);
                     }}
                     style={{
-                      gridColumn: isLast ? "2" : undefined,
                       background: "#15100c",
                       border: `1px solid ${selectedStarId === id ? GOLD : "#33291f"}`,
                       borderRadius: 8,
-                      padding: "8px 6px",
+                      padding: "6px 4px",
                       display: "flex",
                       flexDirection: "column",
                       alignItems: "center",
-                      gap: 4,
+                      gap: 3,
                       cursor: "pointer",
                     }}
                   >
-                    {icon && <img src={icon} alt="" width={22} height={22} style={{ borderRadius: 4 }} />}
-                    <span style={{ fontSize: 10, color: BRIGHT, textAlign: "center" }}>{STAR_NAMES[idx]}</span>
+                    {icon && <img src={icon} alt="" width={18} height={18} style={{ borderRadius: 4 }} />}
+                    <span style={{ fontSize: 9, color: BRIGHT, textAlign: "center" }}>{STAR_NAMES[idx]}</span>
                     <select
                       value={level}
                       onClick={(e) => e.stopPropagation()}
@@ -2904,8 +2887,8 @@ export default function TalentTree() {
                         border: "1px solid #3a322b",
                         borderRadius: 4,
                         color: level > 0 ? GOLD : MUTED,
-                        fontSize: 10,
-                        padding: "2px 4px",
+                        fontSize: 9,
+                        padding: "2px 3px",
                         textAlign: "center",
                         textAlignLast: "center",
                       }}
@@ -2929,8 +2912,29 @@ export default function TalentTree() {
                   </div>
                 );
               })}
+              <button
+                onClick={resetStarsOnly}
+                style={{
+                  gridColumn: "2 / span 2",
+                  padding: "6px 4px",
+                  borderRadius: 8,
+                  border: "1px solid #5a2a24",
+                  background: "transparent",
+                  color: "#e0847a",
+                  fontSize: 11,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 5,
+                }}
+              >
+                {assetHref("reset-btn") && <img src={assetHref("reset-btn")} alt="" width={16} height={16} />}
+                Reset Star Nodes
+              </button>
             </div>
 
+            <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
             {assetHref("nebula-detail-divider") && (
               <img
                 src={assetHref("nebula-detail-divider")}
@@ -2943,13 +2947,6 @@ export default function TalentTree() {
               <div style={{ fontSize: 12, color: MUTED, marginBottom: 16 }}>No points allocated yet.</div>
             ) : (
               <div style={{ marginBottom: 16 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                  <div style={{ flex: 1, height: 1, background: "#33291f" }} />
-                  <span style={{ fontSize: 10, letterSpacing: "0.08em", color: MUTED, textTransform: "uppercase" }}>
-                    Skills
-                  </span>
-                  <div style={{ flex: 1, height: 1, background: "#33291f" }} />
-                </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   {Object.entries(allocated)
                     .filter(([, rank]) => rank > 0)
@@ -3004,13 +3001,6 @@ export default function TalentTree() {
               }
               return (
                 <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                    <div style={{ flex: 1, height: 1, background: "#33291f" }} />
-                    <span style={{ fontSize: 10, letterSpacing: "0.08em", color: MUTED, textTransform: "uppercase" }}>
-                      Stats
-                    </span>
-                    <div style={{ flex: 1, height: 1, background: "#33291f" }} />
-                  </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                     {totals.map((t) => {
                       const isHighlighted = highlightType === t.type;
@@ -3043,6 +3033,7 @@ export default function TalentTree() {
                 </div>
               );
             })()}
+            </div>
           </div>
         </div>
       )}
