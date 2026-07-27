@@ -1246,7 +1246,16 @@ export default function TalentTree() {
             );
           })}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "nowrap" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            flexWrap: "nowrap",
+            overflowX: isMobile ? "auto" : "visible",
+            maxWidth: isMobile ? "100%" : undefined,
+          }}
+        >
           {!isMobile && (
             <span className="talent-title" style={{ fontSize: 15, color: GOLD }}>
               Talent Tree
@@ -1296,29 +1305,42 @@ export default function TalentTree() {
                     Use preset
                   </button>
                 )}
-                <select
-                  value={activeGuideId || ""}
-                  onChange={(e) => setActiveGuideId(e.target.value || null)}
+                <div
                   style={{
-                    background: "#15100c",
-                    border: "1px solid #33291f",
-                    borderRadius: 6,
-                    color: activeGuide ? BRIGHT : MUTED,
-                    fontSize: 12,
-                    padding: "6px 8px",
-                    maxWidth: 120,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "flex-start",
+                    gap: 2,
+                    marginTop: 21,
                   }}
                 >
-                  <option value="">No guide</option>
-                  {guidesForClass.map((g) => (
-                    <option key={g.id} value={g.id}>
-                      {g.name}
-                    </option>
-                  ))}
-                </select>
+                  <select
+                    value={activeGuideId || ""}
+                    onChange={(e) => setActiveGuideId(e.target.value || null)}
+                    style={{
+                      background: "#15100c",
+                      border: "1px solid #33291f",
+                      borderRadius: 6,
+                      color: activeGuide ? BRIGHT : MUTED,
+                      fontSize: 12,
+                      padding: "6px 8px",
+                      maxWidth: 120,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    <option value="">No guide</option>
+                    {guidesForClass.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.name}
+                      </option>
+                    ))}
+                  </select>
+                  <span style={{ fontSize: 9, color: MUTED, maxWidth: 120, lineHeight: 1.25 }}>
+                    (This fills the fastest way to the selected nodes)
+                  </span>
+                </div>
               </>
             );
           })()}
