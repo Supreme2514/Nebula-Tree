@@ -48,6 +48,7 @@ const ICON_B64 = {
   "decrease-btn": `${import.meta.env.BASE_URL}icons/decrease-btn.png`,
   "n3": `${import.meta.env.BASE_URL}icons/n3.png`,
   "n4": `${import.meta.env.BASE_URL}icons/n4.png`,
+  "n8": `${import.meta.env.BASE_URL}icons/n8.png`,
   "1306000_0": `${import.meta.env.BASE_URL}icons/1306000_0.png`,
   "1207000_0": `${import.meta.env.BASE_URL}icons/1207000_0.png`,
   "1303000_0": `${import.meta.env.BASE_URL}icons/1303000_0.png`,
@@ -1524,7 +1525,7 @@ export default function TalentTree() {
             }}
           >
             {assetHref("reset-btn") && <img src={assetHref("reset-btn")} alt="" width={14} height={14} />}
-            Reset
+            Reset Build
           </button>
         </div>
       </div>
@@ -2091,6 +2092,38 @@ export default function TalentTree() {
                 strokeDasharray="3 4"
                 opacity={0.5}
               />
+            )}
+            {assetHref("n8") && (
+              <>
+                <image
+                  href={assetHref("n8")}
+                  x={STAR_CENTER.x - 2 - 29}
+                  y={STAR_CENTER.y + 2 - 29}
+                  width={58}
+                  height={58}
+                  style={{ pointerEvents: "none" }}
+                />
+                <circle
+                  cx={STAR_CENTER.x - 2}
+                  cy={STAR_CENTER.y + 2}
+                  r={29}
+                  fill="none"
+                  stroke="#6fa8dc"
+                  strokeWidth={2}
+                  style={{ pointerEvents: "none" }}
+                />
+                <text
+                  x={STAR_CENTER.x - 2}
+                  y={STAR_CENTER.y + 2 + 29 + 12}
+                  textAnchor="middle"
+                  fontSize={9}
+                  fill="#e0847a"
+                  onClick={resetStarsOnly}
+                  style={{ cursor: "pointer" }}
+                >
+                  Reset star nodes
+                </text>
+              </>
             )}
             {STAR_IDS.map((id, idx) => {
               const c = idx + 1;
@@ -2972,7 +3005,7 @@ export default function TalentTree() {
                 flexShrink: 0,
               }}
             >
-              {STAR_IDS.map((id, idx) => {
+              {STAR_IDS.slice(0, 6).map((id, idx) => {
                 const level = starLevels[id] || 0;
                 const icon = assetHref(`n${idx + 1}`);
                 return (
@@ -3033,25 +3066,102 @@ export default function TalentTree() {
                   </div>
                 );
               })}
+              {(() => {
+                const idx = 6;
+                const id = STAR_IDS[idx];
+                const level = starLevels[id] || 0;
+                const icon = assetHref(`n${idx + 1}`);
+                return (
+                  <div
+                    key={id}
+                    onClick={() => {
+                      setSelectedStarId(id);
+                      setSelectedId(null);
+                    }}
+                    style={{
+                      background: "#15100c",
+                      border: `1px solid ${selectedStarId === id ? GOLD : "#33291f"}`,
+                      borderRadius: 8,
+                      padding: "6px 4px",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      gap: 3,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {icon && <img src={icon} alt="" width={18} height={18} style={{ borderRadius: 4 }} />}
+                    <span style={{ fontSize: 9, color: BRIGHT, textAlign: "center" }}>{STAR_NAMES[idx]}</span>
+                    <select
+                      value={level}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) =>
+                        setStarLevels((prev) => ({ ...prev, [id]: Number(e.target.value) }))
+                      }
+                      style={{
+                        width: "100%",
+                        background: "#221b16",
+                        border: "1px solid #3a322b",
+                        borderRadius: 4,
+                        color: level > 0 ? GOLD : MUTED,
+                        fontSize: 9,
+                        padding: "2px 3px",
+                        textAlign: "center",
+                        textAlignLast: "center",
+                      }}
+                    >
+                      <optgroup label="Tier 0">
+                        <option value={0}>{starLevelLabel(0)}</option>
+                      </optgroup>
+                      {Array.from({ length: 7 }).map((_, tier) => (
+                        <optgroup key={tier} label={`Tier ${tier + 1}`}>
+                          {Array.from({ length: 7 }).map((_, sub) => {
+                            const lvl = tier * 7 + sub + 1;
+                            return (
+                              <option key={lvl} value={lvl}>
+                                {starLevelLabel(lvl)}
+                              </option>
+                            );
+                          })}
+                        </optgroup>
+                      ))}
+                    </select>
+                  </div>
+                );
+              })()}
               <button
                 onClick={resetStarsOnly}
                 style={{
-                  gridColumn: "2 / span 2",
-                  padding: "6px 4px",
+                  background: "#15100c",
+                  border: "1px solid #33291f",
                   borderRadius: 8,
-                  border: "1px solid #5a2a24",
-                  background: "transparent",
-                  color: "#e0847a",
-                  fontSize: 11,
-                  cursor: "pointer",
+                  padding: "6px 4px",
                   display: "flex",
+                  flexDirection: "column",
                   alignItems: "center",
                   justifyContent: "center",
-                  gap: 5,
+                  gap: 3,
+                  cursor: "pointer",
                 }}
               >
-                {assetHref("reset-btn") && <img src={assetHref("reset-btn")} alt="" width={16} height={16} />}
-                Reset Star Nodes
+                {assetHref("n8") && (
+                  <div
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: "50%",
+                      background: "transparent",
+                      border: "2px solid #6fa8dc",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      overflow: "hidden",
+                    }}
+                  >
+                    <img src={assetHref("n8")} alt="" width={18} height={18} style={{ borderRadius: "50%" }} />
+                  </div>
+                )}
+                <span style={{ fontSize: 9, color: BRIGHT, textAlign: "center" }}>Reset Star Nodes</span>
               </button>
             </div>
 
