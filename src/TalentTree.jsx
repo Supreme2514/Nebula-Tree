@@ -3918,8 +3918,15 @@ export default function TalentTree() {
                         {popupValuePill("Save as...")}
                       </div>
                     )}
-                    <div onClick={() => setActiveCharacterId(null)} style={{ cursor: "pointer" }}>
-                      {popupValuePill(activeCharacter ? activeCharacter.name : "Start new")}
+                    <div
+                      onClick={() => {
+                        setActiveCharacterId(null);
+                        resetAll();
+                      }}
+                      title="Clear the current build and start fresh"
+                      style={{ cursor: "pointer" }}
+                    >
+                      {popupValuePill("Start new")}
                     </div>
                   </div>
                 </div>
