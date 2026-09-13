@@ -2736,7 +2736,7 @@ export default function TalentTree() {
             title="Nebula state details"
             style={{
               position: "absolute",
-              bottom: !isMobile ? "calc(164px + env(safe-area-inset-bottom, 0px))" : "calc(112px + env(safe-area-inset-bottom, 0px))",
+              bottom: "calc(164px + env(safe-area-inset-bottom, 0px))",
               right: 16,
               zIndex: 501,
               width: 40,
@@ -2767,7 +2767,7 @@ export default function TalentTree() {
             title={pulseEnabled ? "Hide pulsing highlight" : "Show pulsing highlight"}
             style={{
               position: "absolute",
-              bottom: !isMobile ? "calc(116px + env(safe-area-inset-bottom, 0px))" : "calc(64px + env(safe-area-inset-bottom, 0px))",
+              bottom: "calc(116px + env(safe-area-inset-bottom, 0px))",
               right: 16,
               zIndex: 501,
               width: 40,
@@ -2798,7 +2798,7 @@ export default function TalentTree() {
             title="Cycle zoom level"
             style={{
               position: "absolute",
-              bottom: !isMobile ? "calc(68px + env(safe-area-inset-bottom, 0px))" : "calc(16px + env(safe-area-inset-bottom, 0px))",
+              bottom: "calc(68px + env(safe-area-inset-bottom, 0px))",
               right: 16,
               zIndex: 501,
               width: 40,
@@ -2816,22 +2816,20 @@ export default function TalentTree() {
             <ZoomIcon size={18} />
           </button>
 
-          {!isMobile && (
-            <div
-              style={{
-                position: "absolute",
-                bottom: "calc(16px + env(safe-area-inset-bottom, 0px))",
-                right: 16,
-                zIndex: 501,
-              }}
-            >
-              {popupIconGroup([
-                { iconKey: "undo-btn", onClick: undoBuild, disabled: historyPast.length === 0, title: "Undo last action" },
-                { iconKey: "undo-btn", onClick: redoBuild, mirror: true, disabled: historyFuture.length === 0, title: "Redo" },
-                { iconKey: "reset-btn", onClick: resetAll, title: "Reset all skill nodes", redBorder: true },
-              ])}
-            </div>
-          )}
+          <div
+            style={{
+              position: "absolute",
+              bottom: "calc(16px + env(safe-area-inset-bottom, 0px))",
+              right: 16,
+              zIndex: 501,
+            }}
+          >
+            {popupIconGroup([
+              { iconKey: "undo-btn", onClick: undoBuild, disabled: historyPast.length === 0, title: "Undo last action" },
+              { iconKey: "undo-btn", onClick: redoBuild, mirror: true, disabled: historyFuture.length === 0, title: "Redo" },
+              { iconKey: "reset-btn", onClick: resetAll, title: "Reset all skill nodes", redBorder: true },
+            ])}
+          </div>
           </>
         )}
           <button
@@ -2863,7 +2861,7 @@ export default function TalentTree() {
             <div
               style={{
                 position: "absolute",
-                bottom: !isMobile ? "calc(72px + env(safe-area-inset-bottom, 0px))" : "calc(20px + env(safe-area-inset-bottom, 0px))",
+                bottom: "calc(72px + env(safe-area-inset-bottom, 0px))",
                 right: 62,
                 fontSize: 11,
                 color: BRONZE,
